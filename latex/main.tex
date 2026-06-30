@@ -1,0 +1,259 @@
+% =====================================================================
+%  MAC0426 / MAC5760 - Projeto 2 (Artigo sobre Topico de BD)
+%  Tema: Overhead de Operacoes Criptograficas em Bancos de Dados
+%        Distribuidos
+%  Template: SBC (Sociedade Brasileira de Computacao) - conferencias
+%
+%  COMO COMPILAR (local): pdflatex -> bibtex -> pdflatex -> pdflatex
+%  COMO COMPILAR (Overleaf): ver README.md. Compilador: pdfLaTeX.
+%
+%  ESTRUTURA: cada \section abaixo traz um comentario "% GUIA:" que
+%  explica o que deve ser escrito ali e a qual item do enunciado
+%  (Secao 1 do PDF do projeto) ele corresponde. Os trechos marcados
+%  com "% [PREENCHER]" sao os que o grupo deve completar.
+% =====================================================================
+
+\documentclass[12pt]{article}
+
+\usepackage{sbc-template}
+
+\usepackage{graphicx,url}
+\usepackage[utf8]{inputenc}     % arquivo salvo em UTF-8
+\usepackage[T1]{fontenc}
+\usepackage[brazil]{babel}      % artigo em portugues
+\usepackage{booktabs}           % tabelas com regras horizontais limpas
+\usepackage{amsmath}
+
+\sloppy
+
+% ---------------------------------------------------------------------
+% TITULO E AUTORES
+% ---------------------------------------------------------------------
+\title{Overhead de Operações Criptográficas em\\ Bancos de Dados Distribuídos}
+
+\author{Beatriz Viana Costa\inst{1}, Lys Katherine Park Kang\inst{1},\\
+  Raphaella Brandão Jacques\inst{1}, Stephanie Maria Braga\inst{1}}
+
+\address{Instituto de Matemática e Estatística (IME)\\
+  Universidade de São Paulo (USP) -- São Paulo, SP -- Brasil
+}
+
+\begin{document}
+
+\maketitle
+
+% ---------------------------------------------------------------------
+% RESUMO / ABSTRACT  (item 1: contextualizacao; primeira pagina; <=10 linhas)
+% Rascunho inicial derivado da descricao enviada na definicao do tema.
+% Refinar ao final, quando os resultados estiverem consolidados.
+% ---------------------------------------------------------------------
+\begin{abstract}
+  As distributed systems increasingly store sensitive data, cryptographic
+  techniques become essential to guarantee confidentiality and integrity.
+  However, these techniques introduce performance costs that are amplified in
+  distributed settings, where inter-node communication is already a natural
+  bottleneck. This work investigates the impact of cryptographic operations on
+  the performance of distributed databases, combining a literature review with
+  practical experiments. We configure a distributed database and measure
+  latency and throughput under different scenarios, with and without encryption
+  (in transit and at rest), in order to quantify the introduced overhead and
+  discuss the trade-offs between security and performance.
+  % [PREENCHER: ajustar para refletir os resultados obtidos]
+\end{abstract}
+
+\begin{resumo}
+  À medida que sistemas distribuídos passam a armazenar volumes crescentes de
+  dados sensíveis, técnicas criptográficas tornam-se indispensáveis para
+  garantir confidencialidade e integridade. Contudo, essas técnicas introduzem
+  custos de desempenho que se tornam ainda mais relevantes em ambientes
+  distribuídos, nos quais a comunicação entre nós já representa um gargalo
+  natural. Este trabalho investiga o impacto de operações criptográficas sobre
+  o desempenho de bancos de dados distribuídos, combinando uma revisão da
+  literatura com experimentos práticos. Configuramos um banco de dados
+  distribuído e medimos latência e vazão sob diferentes cenários, com e sem
+  criptografia (em trânsito e em repouso), a fim de quantificar o overhead
+  introduzido e discutir os trade-offs entre segurança e desempenho.
+  % [PREENCHER: ajustar para refletir os resultados obtidos]
+\end{resumo}
+
+
+% =====================================================================
+\section{Introdução}
+\label{sec:introducao}
+% GUIA (itens 1 e 2 do enunciado):
+%  - Contextualizacao e motivacao: por que criptografia em BDs distribuidos
+%    importa hoje (LGPD/GDPR, dados sensiveis, nuvem, multiparty); por que o
+%    overhead e' um problema especialmente em ambientes distribuidos (a
+%    comunicacao entre nos ja e' gargalo).
+%  - Objetivos do estudo: declarar de forma clara o que sera investigado e as
+%    perguntas de pesquisa (RQs).
+%  - Fechar com a "organizacao do texto" (paragrafo descrevendo as secoes).
+
+% [PREENCHER: contextualizacao e motivacao]
+A crescente adoção de bancos de dados distribuídos para o armazenamento de
+grandes volumes de dados sensíveis torna a proteção criptográfica um requisito
+central de projeto~\cite{fuller2017sok}. Entretanto, garantir confidencialidade
+e integridade tem um custo: operações criptográficas consomem CPU e introduzem
+latência adicional, efeito agravado em sistemas distribuídos, nos quais a
+comunicação entre nós já constitui um gargalo natural~\cite{gilbert2002cap}.
+
+% [PREENCHER: objetivos e perguntas de pesquisa]
+Este trabalho tem como objetivo quantificar o overhead introduzido por
+operações criptográficas sobre o desempenho de bancos de dados distribuídos e
+discutir o trade-off entre segurança e desempenho. Especificamente, buscamos
+responder:
+\begin{itemize}
+  \item \textbf{PP1.} Qual o impacto da criptografia \emph{em trânsito} (TLS)
+        sobre latência e vazão? % [PREENCHER/ajustar]
+  \item \textbf{PP2.} Qual o impacto da criptografia \emph{em repouso} (TDE)?
+  \item \textbf{PP3.} Como esse overhead varia com a carga, o número de nós e o
+        perfil de leitura/escrita?
+\end{itemize}
+
+% [PREENCHER: organizacao do texto]
+O restante do artigo está organizado como segue. A
+Seção~\ref{sec:conceitos} apresenta os conceitos fundamentais. A
+Seção~\ref{sec:relacionados} discute o estado da arte. A
+Seção~\ref{sec:metodologia} detalha a metodologia experimental. A
+Seção~\ref{sec:resultados} apresenta os resultados, discutidos na
+Seção~\ref{sec:discussao}. A Seção~\ref{sec:conclusao} conclui o trabalho.
+
+
+% =====================================================================
+\section{Conceitos Fundamentais}
+\label{sec:conceitos}
+% GUIA (item 4 - "principais conceitos relacionados ao tema"):
+%  Apresentar FORMALMENTE os conceitos. Sugestao de subsecoes:
+
+\subsection{Bancos de Dados Distribuídos}
+\label{sec:conc-bdd}
+% [PREENCHER]: particionamento/sharding, replicacao, consenso (Raft/Paxos),
+% teorema CAP e suas implicacoes para desempenho.
+% Citacoes uteis: \cite{ongaro2014raft}, \cite{gilbert2002cap},
+% \cite{corbett2012spanner}, \cite{elmasri2016fundamentals}.
+
+\subsection{Técnicas Criptográficas em Bancos de Dados}
+\label{sec:conc-cripto}
+% [PREENCHER]: organizar pelos tres estados do dado:
+%  - Em repouso (at rest): TDE, AES \cite{nist2001aes}, cripto por
+%    coluna vs. tablespace/disco.
+%  - Em transito (in transit): TLS \cite{rescorla2018tls}, custo do handshake
+%    e das cifras simetricas (AES-GCM, ChaCha20-Poly1305).
+%  - Em uso (in use): cripto que preserva propriedades (deterministica,
+%    OPE \cite{boldyreva2009ope}), CryptDB \cite{popa2011cryptdb},
+%    cripto homomorfica \cite{gentry2009fhe}, enclaves/Always Encrypted
+%    \cite{antonopoulos2020alwaysencrypted}.
+%  - Integridade: hashing, HMAC, arvores de Merkle.
+
+\subsection{Métricas de Desempenho}
+\label{sec:conc-metricas}
+% [PREENCHER]: definir formalmente latencia (media, p50/p95/p99), vazao
+% (ops/s, tps), utilizacao de CPU e overhead de rede. Definir "overhead"
+% como a variacao relativa em relacao ao baseline sem criptografia.
+
+
+% =====================================================================
+\section{Trabalhos Relacionados}
+\label{sec:relacionados}
+% GUIA (item 5 - "estado da arte de trabalhos teoricos e, se pertinente,
+% ferramentas de software"):
+%  - Trabalhos teoricos/cientificos: surveys e estudos de overhead de cripto
+%    em BDs (ex.: \cite{fuller2017sok}, \cite{popa2011cryptdb},
+%    \cite{antonopoulos2020alwaysencrypted}).
+%  - Ferramentas de software (priorizar SOFTWARE LIVRE, conforme enunciado):
+%    SGBDs distribuidos (PostgreSQL/CockroachDB/YugabyteDB/MongoDB/Cassandra),
+%    recursos de cripto de cada um, e ferramentas de benchmark
+%    (YCSB \cite{cooper2010ycsb}, sysbench, BenchBase/TPC-C).
+% [PREENCHER]: situar o nosso estudo em relacao a esses trabalhos (lacuna).
+
+
+% =====================================================================
+\section{Metodologia}
+\label{sec:metodologia}
+% GUIA (item 3 - "metodos empregados"; o metodo aqui e' EXPERIMENTO):
+%  Descrever com detalhe suficiente para REPRODUCAO (criterio do enunciado).
+
+\subsection{Ambiente Experimental}
+\label{sec:met-ambiente}
+% [PREENCHER]: hardware/VM, SO, versao do SGBD, topologia (ex.: cluster de 3
+% nos via Docker Compose), versoes de bibliotecas TLS. SGBD a definir.
+
+\subsection{Carga de Trabalho}
+\label{sec:met-carga}
+% [PREENCHER]: ferramenta de benchmark (ex.: YCSB \cite{cooper2010ycsb} ou
+% sysbench), workloads (proporcao leitura/escrita), tamanho do dataset,
+% tamanho dos registros, numero de threads/clientes.
+
+\subsection{Cenários Avaliados}
+\label{sec:met-cenarios}
+% [PREENCHER]: descrever os cenarios. A Tabela~\ref{tab:cenarios} resume.
+
+% --- Exemplo de tabela (estilo SBC: legenda ANTES da tabela) ------------
+\begin{table}[ht]
+\centering
+\caption{Cenários de criptografia avaliados.}
+\label{tab:cenarios}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Cenário} & \textbf{Em trânsito (TLS)} & \textbf{Em repouso (TDE)} \\
+\midrule
+C0 (baseline)    & não & não \\
+C1               & sim & não \\
+C2               & não & sim \\
+C3               & sim & sim \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Protocolo de Medição}
+\label{sec:met-protocolo}
+% [PREENCHER]: numero de repeticoes, tempo de warm-up, descarte de outliers,
+% como a media e o desvio-padrao sao calculados, como o overhead relativo
+% e' computado em relacao ao C0. Garantir reprodutibilidade.
+
+
+% =====================================================================
+\section{Experimentos e Resultados}
+\label{sec:resultados}
+% GUIA (item 6 - "descricao do estudo realizado e apresentacao dos resultados"):
+%  - Apresentar os dados de forma clara (graficos + tabelas).
+%  - Reportar media +/- desvio; nao usar mais casas decimais que a precisao
+%    justifica (recomendacao do template SBC).
+
+% --- Exemplo de figura (gerar o grafico e salvar em figuras/) -----------
+% \begin{figure}[ht]
+% \centering
+% \includegraphics[width=.7\textwidth]{figuras/vazao_por_cenario.pdf}
+% \caption{Vazão (ops/s) por cenário de criptografia.}
+% \label{fig:vazao}
+% \end{figure}
+
+% [PREENCHER]: vazao por cenario; latencia (p50/p95/p99) por cenario;
+% overhead relativo (%) em relacao ao C0; variacao com numero de nos/carga.
+
+
+% =====================================================================
+\section{Discussão}
+\label{sec:discussao}
+% GUIA (item 7 - "discussao sobre os resultados"):
+% [PREENCHER]: interpretar o trade-off seguranca x desempenho; quando o
+% overhead é aceitavel; qual componente domina (handshake vs. cifra vs. I/O);
+% ameacas a validade (internas/externas) e limitacoes do estudo.
+
+
+% =====================================================================
+\section{Conclusão e Trabalhos Futuros}
+\label{sec:conclusao}
+% [PREENCHER]: sintetizar as respostas as perguntas de pesquisa e apontar
+% extensoes (ex.: criptografia em uso / queryable encryption, enclaves,
+% outros SGBDs, cargas analiticas (OLAP)).
+
+
+% =====================================================================
+% REFERENCIAS  (item: qualidade das referencias e' criterio de avaliacao)
+% Estilo SBC (sbc.bst). Adicionar/editar entradas em referencias.bib.
+% =====================================================================
+\bibliographystyle{sbc}
+\bibliography{referencias}
+
+\end{document}
