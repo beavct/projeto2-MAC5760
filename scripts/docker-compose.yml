@@ -1,0 +1,43 @@
+services:
+  # Cenário 1: Baseline (Sem Criptografia)
+  mongo_baseline:
+    image: mongo:latest
+    container_name: mongo_baseline
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=StackOverflow
+    volumes:
+      - ./db_data_baseline:/data/db
+
+  # Cenário 2: TLS (Com Criptografia)
+  mongo_tls:
+    image: mongo:latest
+    container_name: mongo_tls
+    ports:
+      - "27018:27017" # Porta diferente para não conflitar
+    volumes:
+      - ./db_data_tls:/data/db
+      - ./certs:/etc/ssl/mongodb
+    command: [
+      "--tlsMode", "requireTLS",
+      "--tlsCertificateKeyFile", "/etc/ssl/mongodb/mongodb.pem",
+      "--tlsCAFile", "/etc/ssl/mongodb/mongodb.pem",
+      "--tlsAllowConnectionsWithoutCertificates" 
+    ]
+
+  # Serviço do Postgres para extração
+  db_postgres:
+    image: postgres:15
+    container_name: postgres_stackoverflow
+    environment:
+      POSTGRES_DB: "StackOverflow"
+      POSTGRES_PASSWORD: "123"
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgresql_script_criacao_bd.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

@@ -1,0 +1,41 @@
+No Baseline (27017):
+
+Bash
+docker exec -it mongo_baseline mongosh "StackOverflow" --eval "
+  db.Users.createIndex({ Id: 1 });
+  db.Posts.createIndex({ Id: 1 });
+  db.Posts.createIndex({ OwnerUserId: 1 });
+  db.Comments.createIndex({ PostId: 1 });
+  db.Comments.createIndex({ UserId: 1 });
+  db.Votes.createIndex({ PostId: 1 });
+  db.Badges.createIndex({ UserId: 1 });
+"
+No TLS (27018):
+
+Bash
+docker exec -it mongo_tls mongosh --tls --tlsAllowInvalidCertificates "StackOverflow" --eval "
+  db.Users.createIndex({ Id: 1 });
+  db.Posts.createIndex({ Id: 1 });
+  db.Posts.createIndex({ OwnerUserId: 1 });
+  db.Comments.createIndex({ PostId: 1 });
+  db.Comments.createIndex({ UserId: 1 });
+  db.Votes.createIndex({ PostId: 1 });
+  db.Badges.createIndex({ UserId: 1 });
+"
+
+Para o Baseline:
+
+Bash
+docker exec -it mongo_baseline mongosh "StackOverflow" --eval "
+  db.Posts.createIndex({ ViewCount: -1 });
+  db.Posts.createIndex({ Score: -1 });
+  db.Badges.createIndex({ Name: 1 });
+"
+Para o TLS:
+
+Bash
+docker exec -it mongo_tls mongosh --tls --tlsAllowInvalidCertificates "StackOverflow" --eval "
+  db.Posts.createIndex({ ViewCount: -1 });
+  db.Posts.createIndex({ Score: -1 });
+  db.Badges.createIndex({ Name: 1 });
+"
