@@ -122,34 +122,195 @@ Seção~\ref{sec:discussao}. A Seção~\ref{sec:conclusao} conclui o trabalho.
 % =====================================================================
 \section{Conceitos Fundamentais}
 \label{sec:conceitos}
-% GUIA (item 4 - "principais conceitos relacionados ao tema"):
-%  Apresentar FORMALMENTE os conceitos. Sugestao de subsecoes:
 
+Para compreender o impacto de operações criptográficas em bancos de dados
+distribuídos, é necessário primeiro entender como esses sistemas funcionam,
+quais mecanismos de criptografia estão disponíveis e como medimos seu
+desempenho. Esta seção apresenta esses três pilares.
+
+% ---------------------------------------------------------------------
 \subsection{Bancos de Dados Distribuídos}
 \label{sec:conc-bdd}
-% [PREENCHER]: particionamento/sharding, replicacao, consenso (Raft/Paxos),
-% teorema CAP e suas implicacoes para desempenho.
-% Citacoes uteis: \cite{ongaro2014raft}, \cite{gilbert2002cap},
-% \cite{corbett2012spanner}, \cite{elmasri2016fundamentals}.
 
+Um \textbf{Banco de Dados Distribuído} (BDD) é uma coleção de bancos de dados
+logicamente inter-relacionados, fisicamente dispersos por uma rede de
+computadores e gerenciados por um Sistema de Gerenciamento de Banco de Dados
+Distribuído (SGBDD)~\cite{elmasri2016fundamentals}. A motivação para distribuir
+dados inclui maior disponibilidade, melhor desempenho por proximidade
+geográfica e escalabilidade horizontal. Contudo, essa distribuição introduz
+desafios que não existem em sistemas centralizados – em particular, a
+necessidade de comunicação constante entre nós, que é justamente o canal sobre
+o qual a criptografia em trânsito atua.
+
+\subsubsection{Fragmentação e Replicação}
+
+Para distribuir os dados entre os nós, um BDD utiliza duas técnicas
+complementares: fragmentação e replicação~\cite{elmasri2016fundamentals}.
+
+A \textbf{fragmentação} (também chamada de \emph{sharding} ou particionamento)
+consiste em dividir uma relação em partes menores, cada uma alocada em um nó
+diferente. Há três abordagens: a \emph{fragmentação horizontal} divide as
+tuplas segundo algum critério de seleção (por exemplo, por região geográfica);
+a \emph{fragmentação vertical} distribui os atributos da relação, como em uma operação de projeção; e a
+\emph{fragmentação mista} combina ambas as estratégias. A escolha da estratégia
+influencia diretamente o volume de comunicação entre nós – uma consulta que
+precisa recombinar fragmentos dispersos gera tráfego de rede, e portanto mais
+dados a serem cifrados quando TLS está habilitado.
+
+A \textbf{replicação}, por sua vez, mantém cópias dos dados em múltiplos nós.
+Isso melhora a disponibilidade (se um nó falha, outro responde) e o desempenho
+de leitura (requisições podem ser atendidas localmente). Em contrapartida,
+escritas precisam ser propagadas para todas as réplicas, gerando tráfego
+adicional de sincronização. Em um cenário com TLS, cada mensagem de
+sincronização entre réplicas também passa por cifragem, amplificando o overhead
+proporcionalmente ao grau de replicação.
+
+\subsubsection{Comunicação e Processamento de Consultas}
+
+Em um BDD, o processamento de consultas difere fundamentalmente do caso
+centralizado: o otimizador precisa considerar não apenas o custo de I/O e CPU,
+mas também o \textbf{custo de comunicação} – isto é, o volume de dados
+transferidos pela rede entre os nós~\cite{elmasri2016fundamentals}. Estratégias
+como a semi-junção (\emph{semi-join}) existem justamente para reduzir esse
+tráfego. Esse custo de comunicação é o ponto central deste trabalho: quando
+habilitamos TLS, cada byte transmitido entre nós precisa ser cifrado na origem
+e decifrado no destino, adicionando latência a cada troca de mensagem.
+
+Além disso, para garantir a atomicidade de transações que envolvem múltiplos
+nós, BDDs utilizam protocolos de coordenação como o \emph{Two-Phase Commit}
+(2PC), em que um coordenador troca mensagens com todos os participantes para
+decidir se a transação será confirmada ou abortada~\cite{elmasri2016fundamentals}.
+Protocolos de consenso mais modernos, como
+Raft~\cite{ongaro2014raft}, são utilizados em sistemas como
+Spanner~\cite{corbett2012spanner}. Todos esses protocolos dependem de múltiplas
+rodadas de comunicação, o que os torna sensíveis ao overhead de criptografia em
+trânsito.
+
+\subsubsection{Teorema CAP}
+
+O teorema CAP~\cite{gilbert2002cap} formaliza um trade-off fundamental: em um
+sistema distribuído sujeito a partições de rede, é impossível garantir
+simultaneamente \emph{Consistência} (todos os nós veem os mesmos dados),
+\emph{Disponibilidade} (toda requisição recebe resposta) e \emph{Tolerância a
+Partições}. Como partições são inevitáveis na prática, sistemas precisam optar
+entre priorizar consistência (modelo CP, como Spanner) ou disponibilidade
+(modelo AP, como Cassandra). Essa escolha arquitetural determina a quantidade
+e o padrão de comunicação entre nós, influenciando diretamente o quanto o
+overhead do TLS se manifesta no desempenho global do sistema.
+
+% ---------------------------------------------------------------------
 \subsection{Técnicas Criptográficas em Bancos de Dados}
 \label{sec:conc-cripto}
-% [PREENCHER]: organizar pelos tres estados do dado:
-%  - Em repouso (at rest): TDE, AES \cite{nist2001aes}, cripto por
-%    coluna vs. tablespace/disco.
-%  - Em transito (in transit): TLS \cite{rescorla2018tls}, custo do handshake
-%    e das cifras simetricas (AES-GCM, ChaCha20-Poly1305).
-%  - Em uso (in use): cripto que preserva propriedades (deterministica,
-%    OPE \cite{boldyreva2009ope}), CryptDB \cite{popa2011cryptdb},
-%    cripto homomorfica \cite{gentry2009fhe}, enclaves/Always Encrypted
-%    \cite{antonopoulos2020alwaysencrypted}.
-%  - Integridade: hashing, HMAC, arvores de Merkle.
 
+A proteção de dados em um banco de dados pode ocorrer em três momentos
+distintos, de acordo com o estado em que os dados se
+encontram~\cite{nist2020sp80053r5}.
+
+\subsubsection{Criptografia em Repouso (\emph{at rest})}
+
+Quando os dados estão armazenados em disco, a criptografia em repouso protege
+contra acessos não autorizados ao meio físico (roubo de disco, acesso indevido
+a arquivos do sistema operacional). A abordagem mais comum é a
+\emph{Transparent Data Encryption} (TDE), que cifra as páginas de dados e os
+arquivos de log de forma transparente para a aplicação – ou seja, o banco
+realiza a cifragem e decifragem automaticamente nas operações de I/O, sem
+alterar as consultas~\cite{nist2020sp80053r5}.
+
+O algoritmo predominante é o AES (\emph{Advanced Encryption Standard}), um
+cifrador de bloco simétrico padronizado pelo NIST~\cite{nist2001aes}, com
+chaves de 128, 192 ou 256 bits. A granularidade pode variar: criptografia de
+todo o disco, por \emph{tablespace}, por tabela ou mesmo por coluna individual.
+O overhead da criptografia em repouso incide sobre cada operação de leitura e
+escrita em disco, pois os dados precisam ser decifrados ao serem carregados para
+a memória e cifrados novamente ao serem persistidos.
+
+\subsubsection{Criptografia em Trânsito (\emph{in transit})}
+
+A criptografia em trânsito protege os dados enquanto trafegam pela rede –
+seja entre um cliente e o servidor, seja entre os nós internos do cluster
+distribuído. O protocolo padrão é o TLS (\emph{Transport Layer
+Security})~\cite{rescorla2018tls}, atualmente na versão 1.3.
+
+O custo de desempenho do TLS pode ser decomposto em dois componentes:
+
+\begin{enumerate}
+  \item \textbf{Handshake}: no estabelecimento da conexão, cliente e servidor
+        negociam parâmetros criptográficos utilizando criptografia assimétrica
+        (RSA ou curvas elípticas). É uma operação computacionalmente cara, mas
+        realizada apenas uma vez por conexão (ou por reconexão).
+  \item \textbf{Cifragem simétrica contínua}: após o handshake, todos os dados
+        são cifrados com algoritmos simétricos como AES-GCM ou
+        ChaCha20-Poly1305. O custo por pacote é baixo individualmente, mas em
+        cenários de alta vazão (muitas operações por segundo ou grandes volumes
+        de dados) o impacto acumula.
+\end{enumerate}
+
+Em um banco de dados distribuído, o TLS pode ser habilitado tanto na
+comunicação cliente--servidor quanto na comunicação interna entre os nós do
+cluster (\emph{intra-cluster}). Neste segundo caso, o impacto tende a ser mais
+expressivo, pois protocolos de replicação e consenso geram tráfego constante
+entre os nós.
+
+\subsubsection{Criptografia em Uso (\emph{in use})}
+
+Uma linha de pesquisa mais recente busca permitir computações diretamente sobre
+dados cifrados, eliminando a necessidade de decifrá-los. As abordagens
+incluem: criptografia determinística e que preserva ordem
+(OPE)~\cite{boldyreva2009ope}, que viabilizam consultas de igualdade e
+intervalos sobre dados cifrados, como explorado pelo sistema
+CryptDB~\cite{popa2011cryptdb}; criptografia totalmente homomórfica
+(FHE)~\cite{gentry2009fhe}, que permite computações arbitrárias mas com
+overhead ainda proibitivo para cargas transacionais; e soluções baseadas em
+enclaves seguros (\emph{trusted execution environments}), como o Always
+Encrypted~\cite{antonopoulos2020alwaysencrypted}. Embora não sejam o foco dos
+nossos experimentos, essas técnicas representam o estado da arte em proteção de
+dados e servem como horizonte para trabalhos futuros.
+
+\subsubsection{Integridade}
+
+Complementando a confidencialidade, mecanismos de integridade garantem que os
+dados não foram corrompidos ou adulterados. Técnicas como \emph{hashing}
+criptográfico (SHA-256), \emph{HMAC} (Hash-based Message Authentication Code) e
+árvores de Merkle permitem detectar alterações tanto em dados armazenados quanto
+em dados em trânsito~\cite{nist2020sp80053r5}. No contexto do TLS, a
+integridade é garantida implicitamente pelos modos de operação AEAD
+(\emph{Authenticated Encryption with Associated Data}), como o AES-GCM, que
+combina cifragem e autenticação em uma única operação.
+
+% ---------------------------------------------------------------------
 \subsection{Métricas de Desempenho}
 \label{sec:conc-metricas}
-% [PREENCHER]: definir formalmente latencia (media, p50/p95/p99), vazao
-% (ops/s, tps), utilizacao de CPU e overhead de rede. Definir "overhead"
-% como a variacao relativa em relacao ao baseline sem criptografia.
+
+Para avaliar o impacto das operações criptográficas de forma rigorosa, é
+necessário definir as métricas que serão
+observadas~\cite{cooper2010ycsb}:
+
+\begin{itemize}
+  \item \textbf{Latência}: o tempo entre o envio de uma requisição e o
+        recebimento da resposta correspondente. Como a distribuição de latências
+        tende a ser assimétrica (com uma ``cauda longa''), reportamos não apenas
+        a média, mas também a mediana (p50) e os percentis p95 e p99, que
+        revelam o comportamento nos piores casos.
+  \item \textbf{Vazão (\emph{throughput})}: o número de operações completadas
+        por unidade de tempo (operações/segundo). Enquanto a latência captura a
+        experiência individual de cada requisição, a vazão reflete a capacidade
+        agregada do sistema sob carga.
+  \item \textbf{Utilização de CPU}: a fração do processamento dedicada a
+        operações criptográficas. Permite distinguir se o overhead observado
+        decorre de cifragem ou de outros fatores (I/O, contenção de rede).
+  \item \textbf{Overhead de rede}: o aumento no volume de bytes transmitidos
+        devido aos cabeçalhos e metadados introduzidos pelo TLS (registros TLS,
+        MACs, padding).
+\end{itemize}
+
+Para quantificar o impacto relativo da criptografia, definimos o
+\textbf{overhead} em relação ao cenário \emph{baseline} (sem criptografia):
+\begin{equation}
+  \text{overhead}(\%) = \frac{M_{\text{cripto}} - M_{\text{baseline}}}{M_{\text{baseline}}} \times 100
+\end{equation}
+onde $M$ representa o valor de uma métrica (latência ou vazão) no respectivo
+cenário. Um overhead positivo em latência indica degradação; um overhead
+negativo em vazão indica queda na capacidade do sistema.
 
 
 % =====================================================================
