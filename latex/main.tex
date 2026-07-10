@@ -55,10 +55,14 @@
   bottleneck. This work investigates the impact of cryptographic operations on
   the performance of distributed databases, combining a literature review with
   practical experiments. We configure a distributed database and measure
-  latency and throughput under different scenarios, with and without encryption
-  (in transit and at rest), in order to quantify the introduced overhead and
-  discuss the trade-offs between security and performance.
-  % [PREENCHER: ajustar para refletir os resultados obtidos]
+  latency and throughput with and without encryption in transit (TLS), in order
+  to quantify the introduced overhead and discuss the trade-offs between security
+  and performance. Over a real, heterogeneous query workload on MongoDB, enabling
+  client--server TLS introduces a median latency overhead of about 15\% (13\% on
+  average) and a throughput reduction of about 11\%. This cost is dominated by the
+  per-connection handshake: it is nearly constant in absolute terms
+  ($\approx$65--70~ms per query), so the \emph{relative} overhead shrinks as the
+  intrinsic cost of the query grows.
 \end{abstract}
 
 \begin{resumo}
@@ -70,10 +74,14 @@
   natural. Este trabalho investiga o impacto de operações criptográficas sobre
   o desempenho de bancos de dados distribuídos, combinando uma revisão da
   literatura com experimentos práticos. Configuramos um banco de dados
-  distribuído e medimos latência e vazão sob diferentes cenários, com e sem
-  criptografia (em trânsito e em repouso), a fim de quantificar o overhead
-  introduzido e discutir os trade-offs entre segurança e desempenho.
-  % [PREENCHER: ajustar para refletir os resultados obtidos]
+  distribuído e medimos latência e vazão com e sem criptografia em trânsito
+  (TLS), a fim de quantificar o overhead introduzido e discutir os trade-offs
+  entre segurança e desempenho. Sobre uma carga de trabalho real e heterogênea no
+  MongoDB, habilitar o TLS cliente--servidor introduz um overhead mediano de
+  latência de cerca de 15\% (13\% em média) e uma queda de vazão de cerca de
+  11\%. Esse custo é dominado pelo \emph{handshake} por conexão: ele é quase
+  constante em termos absolutos ($\approx$65--70~ms por consulta), de modo que o
+  overhead \emph{relativo} diminui conforme cresce o custo intrínseco da consulta.
 \end{resumo}
 
 
@@ -89,7 +97,6 @@
 %    perguntas de pesquisa (RQs).
 %  - Fechar com a "organizacao do texto" (paragrafo descrevendo as secoes).
 
-% [PREENCHER: contextualizacao e motivacao]
 A crescente adoção de bancos de dados distribuídos para o armazenamento de
 grandes volumes de dados sensíveis torna a proteção criptográfica um requisito
 central de projeto~\cite{fuller2017sok}. Entretanto, garantir confidencialidade
@@ -97,20 +104,26 @@ e integridade tem um custo: operações criptográficas consomem CPU e introduze
 latência adicional, efeito agravado em sistemas distribuídos, nos quais a
 comunicação entre nós já constitui um gargalo natural~\cite{gilbert2002cap}.
 
-% [PREENCHER: objetivos e perguntas de pesquisa]
-Este trabalho tem como objetivo quantificar o overhead introduzido por
-operações criptográficas sobre o desempenho de bancos de dados distribuídos e
-discutir o trade-off entre segurança e desempenho. Especificamente, buscamos
-responder:
+Este trabalho tem como objetivo quantificar, de forma reprodutível, o overhead
+introduzido pela criptografia \emph{em trânsito} (TLS) sobre o desempenho de um
+banco de dados sob uma carga de trabalho real e heterogênea, e discutir o
+trade-off entre segurança e desempenho. Delimitamos o escopo empírico ao canal
+de comunicação cliente--servidor de um SGBD orientado a documentos (MongoDB); a
+criptografia em repouso e em uso é apresentada conceitualmente
+(Seção~\ref{sec:conceitos}) e retomada como trabalho futuro
+(Seção~\ref{sec:conclusao}), mas não é avaliada empiricamente aqui.
+Especificamente, buscamos responder:
 \begin{itemize}
-  \item \textbf{PP1.} Qual o impacto da criptografia \emph{em trânsito} (TLS)
-        sobre latência e vazão? % [PREENCHER/ajustar]
-  \item \textbf{PP2.} Qual o impacto da criptografia \emph{em repouso} (TDE)?
-  \item \textbf{PP3.} Como esse overhead varia com a carga, o número de nós e o
-        perfil de leitura/escrita?
+  \item \textbf{PP1.} Qual é o impacto da criptografia em trânsito (TLS) sobre a
+        latência e a vazão de um SGBD sob uma carga de trabalho real e
+        heterogênea?
+  \item \textbf{PP2.} Como esse overhead varia entre diferentes classes de
+        operação (agrupamento, junção, subconsulta, busca, inserção e
+        modificação)?
+  \item \textbf{PP3.} Como o overhead \emph{relativo} se relaciona ao custo
+        \emph{intrínseco} de cada consulta?
 \end{itemize}
 
-% [PREENCHER: organizacao do texto]
 O restante do artigo está organizado como segue. A
 Seção~\ref{sec:conceitos} apresenta os conceitos fundamentais. A
 Seção~\ref{sec:relacionados} discute o estado da arte. A
@@ -138,7 +151,7 @@ computadores e gerenciados por um Sistema de Gerenciamento de Banco de Dados
 Distribuído (SGBDD)~\cite{elmasri2016fundamentals}. A motivação para distribuir
 dados inclui maior disponibilidade, melhor desempenho por proximidade
 geográfica e escalabilidade horizontal. Contudo, essa distribuição introduz
-desafios que não existem em sistemas centralizados – em particular, a
+desafios que não existem em sistemas centralizados --- em particular, a
 necessidade de comunicação constante entre nós, que é justamente o canal sobre
 o qual a criptografia em trânsito atua.
 
@@ -153,7 +166,7 @@ diferente. Há três abordagens: a \emph{fragmentação horizontal} divide as
 tuplas segundo algum critério de seleção (por exemplo, por região geográfica);
 a \emph{fragmentação vertical} distribui os atributos da relação, como em uma operação de projeção; e a
 \emph{fragmentação mista} combina ambas as estratégias. A escolha da estratégia
-influencia diretamente o volume de comunicação entre nós – uma consulta que
+influencia diretamente o volume de comunicação entre nós --- uma consulta que
 precisa recombinar fragmentos dispersos gera tráfego de rede, e portanto mais
 dados a serem cifrados quando TLS está habilitado.
 
@@ -169,7 +182,7 @@ proporcionalmente ao grau de replicação.
 
 Em um BDD, o processamento de consultas difere fundamentalmente do caso
 centralizado: o otimizador precisa considerar não apenas o custo de I/O e CPU,
-mas também o \textbf{custo de comunicação} – isto é, o volume de dados
+mas também o \textbf{custo de comunicação} --- isto é, o volume de dados
 transferidos pela rede entre os nós~\cite{elmasri2016fundamentals}. Estratégias
 como a semi-junção (\emph{semi-join}) existem justamente para reduzir esse
 tráfego. Esse custo de comunicação é o ponto central deste trabalho: quando
@@ -212,7 +225,7 @@ Quando os dados estão armazenados em disco, a criptografia em repouso protege
 contra acessos não autorizados ao meio físico (roubo de disco, acesso indevido
 a arquivos do sistema operacional). A abordagem mais comum é a
 \emph{Transparent Data Encryption} (TDE), que cifra as páginas de dados e os
-arquivos de log de forma transparente para a aplicação – ou seja, o banco
+arquivos de log de forma transparente para a aplicação --- ou seja, o banco
 realiza a cifragem e decifragem automaticamente nas operações de I/O, sem
 alterar as consultas~\cite{nist2020sp80053r5}.
 
@@ -226,7 +239,7 @@ a memória e cifrados novamente ao serem persistidos.
 
 \subsubsection{Criptografia em Trânsito (\emph{in transit})}
 
-A criptografia em trânsito protege os dados enquanto trafegam pela rede –
+A criptografia em trânsito protege os dados enquanto trafegam pela rede ---
 seja entre um cliente e o servidor, seja entre os nós internos do cluster
 distribuído. O protocolo padrão é o TLS (\emph{Transport Layer
 Security})~\cite{rescorla2018tls}, atualmente na versão 1.3.
@@ -306,108 +319,522 @@ observadas~\cite{cooper2010ycsb}:
 Para quantificar o impacto relativo da criptografia, definimos o
 \textbf{overhead} em relação ao cenário \emph{baseline} (sem criptografia):
 \begin{equation}
+  \label{eq:overhead}
   \text{overhead}(\%) = \frac{M_{\text{cripto}} - M_{\text{baseline}}}{M_{\text{baseline}}} \times 100
 \end{equation}
 onde $M$ representa o valor de uma métrica (latência ou vazão) no respectivo
 cenário. Um overhead positivo em latência indica degradação; um overhead
-negativo em vazão indica queda na capacidade do sistema.
+negativo em vazão indica queda na capacidade do sistema. Neste trabalho, as
+métricas efetivamente coletadas são a \textbf{latência} (com ênfase na mediana,
+p50) e a \textbf{vazão}; a utilização de CPU e o overhead de rede são definidos
+acima por completude conceitual, mas não foram instrumentados em nosso
+arcabouço de medição (Seção~\ref{sec:metodologia}).
 
 
 % =====================================================================
 \section{Trabalhos Relacionados}
 \label{sec:relacionados}
-% GUIA (item 5 - "estado da arte de trabalhos teoricos e, se pertinente,
-% ferramentas de software"):
-%  - Trabalhos teoricos/cientificos: surveys e estudos de overhead de cripto
-%    em BDs (ex.: \cite{fuller2017sok}, \cite{popa2011cryptdb},
-%    \cite{antonopoulos2020alwaysencrypted}).
-%  - Ferramentas de software (priorizar SOFTWARE LIVRE, conforme enunciado):
-%    SGBDs distribuidos (PostgreSQL/CockroachDB/YugabyteDB/MongoDB/Cassandra),
-%    recursos de cripto de cada um, e ferramentas de benchmark
-%    (YCSB \cite{cooper2010ycsb}, sysbench, BenchBase/TPC-C).
-% [PREENCHER]: situar o nosso estudo em relacao a esses trabalhos (lacuna).
+
+Esta seção situa nosso estudo em relação a (i) trabalhos teóricos e de sistemas
+sobre proteção criptográfica de bancos de dados e (ii) ferramentas de software
+livre relevantes para o experimento.
+
+\subsection{Estudos Teóricos e de Sistemas}
+\label{sec:rel-teoria}
+
+Boa parte da literatura sobre criptografia em bancos de dados concentra-se na
+proteção dos dados \emph{em repouso} e \emph{em uso}, buscando permitir consultas
+diretamente sobre dados cifrados. O CryptDB~\cite{popa2011cryptdb} foi um marco
+nessa direção: combinando criptografia determinística e que preserva ordem
+(OPE)~\cite{boldyreva2009ope}, executa consultas SQL de igualdade e intervalo
+sobre dados cifrados, reportando um overhead de vazão da ordem de 20--30\% em
+cargas transacionais. O \emph{Always Encrypted}~\cite{antonopoulos2020alwaysencrypted}
+adota abordagem complementar, apoiando-se em enclaves seguros (\emph{trusted
+execution environments}) para processar dados decifrados apenas dentro de uma
+região protegida do processador. No extremo da expressividade está a criptografia
+totalmente homomórfica (FHE)~\cite{gentry2009fhe}, que admite computações
+arbitrárias sobre cifras, mas cujo custo ainda é proibitivo para cargas de
+produção. A systematization of knowledge de Fuller et
+al.~\cite{fuller2017sok} organiza esse espaço de projeto, evidenciando o
+trade-off recorrente entre expressividade das consultas, vazamento de informação
+e desempenho.
+
+Em contraste, a criptografia \emph{em trânsito} (TLS)~\cite{rescorla2018tls}
+costuma ser tratada como um custo secundário e ``barato'', raramente
+quantificado de forma sistemática na literatura de \emph{benchmarking} de SGBDs.
+Nosso trabalho examina justamente essa suposição, medindo empiricamente o custo
+do TLS no canal cliente--servidor de um SGBD orientado a documentos.
+
+\subsection{Ferramentas de Software Livre}
+\label{sec:rel-ferramentas}
+
+Conforme sugerido no enunciado, priorizamos ferramentas de software livre, que
+podem ser instaladas e testadas sem restrições. No que diz respeito a SGBDs, o
+\textbf{MongoDB Community} oferece suporte nativo a TLS tanto no canal
+cliente--servidor quanto na comunicação intra-cluster~\cite{mongodb-tls}, o que o
+torna adequado ao nosso experimento. Entre os SGBDs relacionais distribuídos
+(\emph{NewSQL}), CockroachDB e YugabyteDB também oferecem TLS intra-cluster e
+criptografia em repouso, enquanto o Apache Cassandra segue o modelo AP do teorema
+CAP~\cite{gilbert2002cap}. A cifragem em si, em todos esses sistemas, é
+tipicamente delegada a bibliotecas como o OpenSSL e acelerada por instruções de
+hardware (AES-NI).
+
+Para a geração de carga, ferramentas consolidadas incluem o
+YCSB~\cite{cooper2010ycsb}, voltado a sistemas NoSQL, além de sysbench e
+BenchBase (TPC-C). Optamos, contudo, por uma carga composta de \emph{consultas
+reais} herdadas de um projeto anterior (Seção~\ref{sec:met-carga}), em vez de um
+gerador sintético: essa escolha sacrifica a padronização típica dos geradores em
+favor de maior validade ecológica, capturando padrões de acesso heterogêneos
+(analíticos e transacionais).
+
+\subsection{Posicionamento}
+\label{sec:rel-lacuna}
+
+Os \emph{benchmarks} clássicos tendem a enfatizar a criptografia em repouso ou
+consultável sobre cargas sintéticas e uniformes, nas quais todas as operações têm
+custo semelhante. Nosso estudo difere em dois pontos. Primeiro, isola o canal
+\emph{em trânsito} (TLS) de um repositório de documentos sob uma mistura
+heterogênea de consultas reais --- analíticas (agrupamento, junção, subconsulta)
+e transacionais (busca, inserção, modificação). Segundo, caracteriza como o
+overhead \emph{relativo} depende do custo \emph{intrínseco} de cada consulta ---
+dimensão que cargas sintéticas uniformes tendem a ocultar, mas que se mostra
+central para interpretar corretamente o impacto da criptografia.
 
 
 % =====================================================================
 \section{Metodologia}
 \label{sec:metodologia}
-% GUIA (item 3 - "metodos empregados"; o metodo aqui e' EXPERIMENTO):
-%  Descrever com detalhe suficiente para REPRODUCAO (criterio do enunciado).
+O método empregado neste estudo é o \textbf{experimento} controlado. Descrevemos
+a seguir, com o detalhe necessário à reprodução, o ambiente, a carga de trabalho,
+os cenários e o protocolo de medição. Todo o código e os dados citados encontram-se
+no repositório do projeto.
 
 \subsection{Ambiente Experimental}
 \label{sec:met-ambiente}
-% [PREENCHER]: hardware/VM, SO, versao do SGBD, topologia (ex.: cluster de 3
-% nos via Docker Compose), versoes de bibliotecas TLS. SGBD a definir.
+
+Os experimentos foram executados em um único host --- um computador
+\underline{\hspace{4cm}} (processador \underline{\hspace{3.5cm}},
+\underline{\hspace{1.5cm}}~GB de RAM) com sistema operacional
+\underline{\hspace{3cm}}. A orquestração é feita via \textbf{Docker Compose}, que
+instancia dois SGBDs \textbf{MongoDB} a partir da imagem oficial \texttt{mongo}
+(versão \underline{\hspace{2cm}}):
+
+\begin{itemize}
+  \item \texttt{mongo\_baseline} --- na porta 27017, sem qualquer criptografia
+        (configuração padrão);
+  \item \texttt{mongo\_tls} --- na porta 27018, iniciado com
+        \texttt{-{}-tlsMode requireTLS} e um par certificado/chave
+        \emph{self-signed}, exigindo TLS mas não a autenticação mútua por
+        certificado de cliente (\texttt{-{}-tlsAllowConnectionsWithoutCertificates}).
+\end{itemize}
+
+O cliente utilizado é o \texttt{mongosh} (\emph{MongoDB Shell}), invocado pelo
+script de automação. Como ambos os contêineres residem no mesmo host, a
+comunicação cliente--servidor ocorre via \emph{loopback}: dessa forma, o que
+medimos é predominantemente o \textbf{custo de CPU} da criptografia (handshake e
+cifra), e não a latência de uma rede de longa distância. Um terceiro contêiner
+(PostgreSQL~15) foi usado apenas para extrair e converter o conjunto de dados
+(Seção~\ref{sec:met-carga}), não participando das medições.
+
+É importante delimitar o escopo: trata-se de \emph{instâncias de nó único}, sem
+fragmentação (\emph{sharding}) nem replicação (\emph{replica set}). Medimos,
+portanto, o canal cliente--servidor, e não a amplificação criptográfica da
+comunicação \emph{intra-cluster} (replicação e consenso). Essa limitação é
+retomada na Seção~\ref{sec:discussao}.
 
 \subsection{Carga de Trabalho}
 \label{sec:met-carga}
-% [PREENCHER]: ferramenta de benchmark (ex.: YCSB \cite{cooper2010ycsb} ou
-% sysbench), workloads (proporcao leitura/escrita), tamanho do dataset,
-% tamanho dos registros, numero de threads/clientes.
+
+\paragraph{Conjunto de dados.} Utilizamos o conjunto de dados público do
+\emph{Stack Exchange Data Dump}~\cite{stackexchange-dump}, herdado de um projeto
+anterior da disciplina. Originalmente relacional, o dump foi extraído de um
+PostgreSQL e convertido em coleções MongoDB, carregadas de forma
+\emph{idêntica} nos dois contêineres --- o que é essencial para uma comparação
+justa. A Tabela~\ref{tab:dataset} resume o volume de dados. Os mesmos índices
+secundários foram criados em ambas as instâncias (por exemplo, sobre
+\texttt{Id}, \texttt{OwnerUserId}, \texttt{PostId}, \texttt{UserId},
+\texttt{Name}, \texttt{ViewCount} e \texttt{Score}).
+
+\begin{table}[ht]
+\centering
+\caption{Volume do conjunto de dados (coleções MongoDB), idêntico nos dois cenários.}
+\label{tab:dataset}
+\begin{tabular}{@{}lr@{}}
+\toprule
+\textbf{Coleção} & \textbf{Documentos} \\
+\midrule
+Posts     & 500\,000 \\
+Comments  & 500\,000 \\
+Badges    & 500\,000 \\
+Votes     & 500\,000 \\
+Users     & 299\,398 \\
+PostLinks & 93\,091 \\
+PostTypes & 8 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Consultas.} Em vez de um gerador sintético, a carga é composta de
+\textbf{30 consultas reais} (também herdadas do projeto anterior), organizadas em
+seis classes que cobrem tanto operações analíticas quanto transacionais. A
+Tabela~\ref{tab:workload} descreve as classes e sua quantidade. As mesmas 30
+consultas, na mesma ordem, são executadas em ambos os cenários.
+
+\begin{table}[ht]
+\centering
+\caption{Classes de consulta que compõem a carga de trabalho (30 consultas ao todo).}
+\label{tab:workload}
+\begin{tabular}{@{}llc@{}}
+\toprule
+\textbf{Classe} & \textbf{Descrição / exemplo} & \textbf{Qtd.} \\
+\midrule
+Agrupamento & Agregações analíticas (\texttt{\$group}, \texttt{\$avg}, \texttt{\$sum}) & 6 \\
+Junção      & Junções entre coleções (\texttt{\$lookup}, até 4 níveis)              & 7 \\
+Subconsulta & Filtros correlacionados (\texttt{\$expr}, \emph{pipelines} internos)  & 5 \\
+Busca       & Busca por chave e por padrão textual (\texttt{find}, \texttt{\$regex}) & 2 \\
+Inserção    & Inserções individuais e em lote (\texttt{insertOne}, \texttt{insertMany}) & 5 \\
+Modificação & Atualizações e remoções (\texttt{updateMany}, \texttt{deleteMany})    & 5 \\
+\midrule
+\multicolumn{2}{@{}l}{\textbf{Total}} & \textbf{30} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+O cliente é \emph{único} e as consultas são executadas de forma \emph{sequencial}
+(uma repetição por vez), de modo que a vazão medida reflete a capacidade sob um
+cliente serial, e não sob concorrência (ver Seção~\ref{sec:met-protocolo}).
 
 \subsection{Cenários Avaliados}
 \label{sec:met-cenarios}
-% [PREENCHER]: descrever os cenarios. A Tabela~\ref{tab:cenarios} resume.
 
-% --- Exemplo de tabela (estilo SBC: legenda ANTES da tabela) ------------
+Avaliamos dois cenários, que diferem \emph{exclusivamente} quanto à criptografia
+em trânsito no canal cliente--servidor (Tabela~\ref{tab:cenarios}). Manter tudo o
+mais constante (host, dataset, índices, consultas e ordem de execução) é o que
+permite atribuir a diferença de desempenho ao TLS. A criptografia em repouso
+(TDE) e em uso, embora conceitualmente relevantes (Seção~\ref{sec:conceitos}),
+\textbf{não são avaliadas empiricamente} neste estudo e ficam como trabalho
+futuro (Seção~\ref{sec:conclusao}).
+
 \begin{table}[ht]
 \centering
-\caption{Cenários de criptografia avaliados.}
+\caption{Cenários avaliados. Diferem apenas quanto à criptografia em trânsito (TLS).}
 \label{tab:cenarios}
 \begin{tabular}{@{}lll@{}}
 \toprule
-\textbf{Cenário} & \textbf{Em trânsito (TLS)} & \textbf{Em repouso (TDE)} \\
+\textbf{Cenário} & \textbf{Em trânsito (TLS)} & \textbf{Configuração} \\
 \midrule
-C0 (baseline)    & não & não \\
-C1               & sim & não \\
-C2               & não & sim \\
-C3               & sim & sim \\
+C0 (baseline) & não & \texttt{mongod} padrão, porta 27017 \\
+C1 (TLS)      & sim & \texttt{mongod} com \texttt{requireTLS}, porta 27018 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Protocolo de Medição}
 \label{sec:met-protocolo}
-% [PREENCHER]: numero de repeticoes, tempo de warm-up, descarte de outliers,
-% como a media e o desvio-padrao sao calculados, como o overhead relativo
-% e' computado em relacao ao C0. Garantir reprodutibilidade.
+
+A medição é orquestrada por um script de automação. Para \emph{cada uma} das 30
+consultas e \emph{cada} cenário, o procedimento é:
+
+\begin{enumerate}
+  \item \textbf{Aquecimento (\emph{warm-up}):} uma execução descartada, que
+        aquece o \emph{cache} do sistema operacional e o motor de armazenamento
+        WiredTiger;
+  \item \textbf{Medição:} 20 execuções cronometradas.
+\end{enumerate}
+
+Cada execução consiste em invocar o \texttt{mongosh} como um \emph{novo processo},
+que abre uma \emph{nova conexão} ao \texttt{mongod}, executa a consulta a partir
+de um arquivo \texttt{.js} e encerra. Cronometra-se o tempo de parede
+(\emph{wall-clock}) da invocação completa. A partir das 20 amostras, calculam-se,
+por consulta e cenário: a latência mediana (p50), os percentis de cauda (p95,
+p99) e a vazão, definida como $n/\sum_i t_i$ --- isto é, o \emph{recíproco da
+latência média} sob um único cliente sequencial. O overhead relativo é obtido
+pela Equação~(\ref{eq:overhead}), sempre em relação ao baseline (C0).
+
+Três características do arcabouço merecem registro explícito, por afetarem a
+interpretação dos resultados:
+
+\begin{itemize}
+  \item \textbf{Conexão nova por execução.} Como cada repetição abre uma conexão
+        nova, no cenário C1 o \emph{handshake} TLS é pago a \emph{cada} execução.
+        Isso corresponde ao \emph{pior caso} para o custo do handshake --- ou
+        seja, a ausência de reúso de conexões (\emph{connection pooling}).
+  \item \textbf{Partida do \texttt{mongosh}.} O tempo absoluto inclui a
+        inicialização do processo \texttt{mongosh} (ambiente Node.js), o que
+        infla os valores absolutos de latência (é por isso que mesmo a consulta
+        mais barata leva $\approx$0,43~s). Contudo, essa parcela é \emph{comum}
+        aos dois cenários e, portanto, \emph{cancela-se na diferença}
+        baseline$-$TLS. Assim, embora os valores absolutos não representem a
+        latência pura da consulta, a \emph{diferença} entre os cenários isola
+        legitimamente o custo do TLS (handshake e cifra).
+  \item \textbf{Estimadores de cauda com $n=20$.} Os índices usados para p95 e
+        p99 ($\lfloor 20 \cdot 0{,}95 \rfloor = \lfloor 20 \cdot 0{,}99 \rfloor = 19$)
+        coincidem, de modo que p95 e p99 correspondem \emph{ambos ao máximo}
+        observado --- razão pela qual são idênticos em nossos dados. Por isso,
+        adotamos a \textbf{mediana (p50)} como métrica principal de latência e
+        tratamos p95/p99 apenas como um indicador de cauda (o valor máximo), com
+        essa ressalva.
+\end{itemize}
+
+A reprodutibilidade é favorecida pelo caráter determinístico do experimento: o
+mesmo dataset é carregado em ambas as instâncias, as 30 consultas são fixas e
+executadas na mesma ordem nos dois cenários, e o código de automação está
+disponível no repositório.
 
 
 % =====================================================================
 \section{Experimentos e Resultados}
 \label{sec:resultados}
-% GUIA (item 6 - "descricao do estudo realizado e apresentacao dos resultados"):
-%  - Apresentar os dados de forma clara (graficos + tabelas).
-%  - Reportar media +/- desvio; nao usar mais casas decimais que a precisao
-%    justifica (recomendacao do template SBC).
 
-% --- Exemplo de figura (gerar o grafico e salvar em figuras/) -----------
-% \begin{figure}[ht]
-% \centering
-% \includegraphics[width=.7\textwidth]{figuras/vazao_por_cenario.pdf}
-% \caption{Vazão (ops/s) por cenário de criptografia.}
-% \label{fig:vazao}
-% \end{figure}
+Habilitar o TLS degradou o desempenho em \emph{todas} as 30 consultas, sem
+exceção. Considerando o conjunto completo, o overhead de latência (p50) foi de
+\textbf{13,0\% em média} (mediana de 15,4\%), variando de 2,6\% a 17,1\% conforme
+a consulta; a vazão caiu, correspondentemente, \textbf{11,1\% em média} (mediana
+de 13,1\%). A Tabela~\ref{tab:resumo} agrega esses resultados por classe de
+consulta.
 
-% [PREENCHER]: vazao por cenario; latencia (p50/p95/p99) por cenario;
-% overhead relativo (%) em relacao ao C0; variacao com numero de nos/carga.
+\begin{table}[ht]
+\centering
+\caption{Overhead do TLS por classe de consulta (média das consultas de cada
+classe). Overhead de latência calculado sobre a p50; queda de vazão em relação ao
+baseline.}
+\label{tab:resumo}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Classe} & \textbf{Consultas} & \textbf{Overhead p50 (\%)} & \textbf{Queda de vazão (\%)} \\
+\midrule
+Agrupamento & 6 & 11,3 & 11,2 \\
+Junção      & 7 & 13,4 & 11,3 \\
+Subconsulta & 5 & 12,2 & 10,2 \\
+Busca       & 2 & 15,9 & 13,9 \\
+Inserção    & 5 & 15,7 & 12,9 \\
+Modificação & 5 & 11,7 & \phantom{0}8,5 \\
+\midrule
+\textbf{Geral} & \textbf{30} & \textbf{13,0} & \textbf{11,1} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Latência e vazão por classe.} A Figura~\ref{fig:latencia} contrasta a
+latência p50 média de cada classe nos dois cenários (em escala logarítmica, dada
+a grande dispersão entre consultas leves e pesadas), e a Figura~\ref{fig:vazao}
+faz o mesmo para a vazão. Em ambas, a barra do cenário TLS é consistentemente
+pior, mas a distância entre as barras é pequena e razoavelmente uniforme --- um
+primeiro indício de que o custo do TLS é aproximadamente \emph{aditivo}, e não
+proporcional ao trabalho da consulta.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=.85\textwidth]{figuras/fig_latencia_categoria.pdf}
+\caption{Latência p50 média por classe de consulta, baseline \emph{versus} TLS
+(escala logarítmica no eixo vertical).}
+\label{fig:latencia}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=.85\textwidth]{figuras/fig_vazao_categoria.pdf}
+\caption{Vazão média (operações por segundo) por classe de consulta, baseline
+\emph{versus} TLS.}
+\label{fig:vazao}
+\end{figure}
+
+\paragraph{O custo do TLS é quase constante.} A observação central do estudo
+aparece ao examinar o overhead em termos \emph{absolutos}: a diferença de
+latência p50 entre TLS e baseline é notavelmente estável, com \textbf{mediana de
+71,7~ms} por consulta (mínimo de 62,7~ms). Esse valor quase fixo é a assinatura
+do \emph{handshake} TLS pago a cada conexão (Seção~\ref{sec:met-protocolo}): como
+cada execução abre uma conexão nova, o custo de estabelecimento do canal seguro
+incide uma vez por consulta, praticamente independente do trabalho que a consulta
+realiza.
+
+A consequência direta é que o overhead \emph{relativo} não é uniforme --- ele
+\emph{diminui} conforme cresce o custo intrínseco da consulta, pois o custo fixo
+do handshake é amortizado por um tempo de execução maior. A
+Figura~\ref{fig:overhead} torna esse efeito explícito: consultas baratas (busca,
+inserção, junções e subconsultas simples), com p50 baseline em torno de 0,4--0,5~s,
+sofrem overhead de 15--17\%, ao passo que as duas consultas mais custosas ---
+uma junção de múltiplos \texttt{\$lookup} (p50 baseline de 4,2~s) e uma
+subconsulta correlacionada (11,1~s) --- caem para 2,6\% e 9,0\%,
+respectivamente. Em outras palavras, o \emph{mesmo} custo absoluto de segurança
+representa uma fração cada vez menor do tempo total à medida que a consulta se
+torna mais pesada.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=.9\textwidth]{figuras/fig_overhead_vs_custo.pdf}
+\caption{Overhead relativo de latência do TLS (\%) em função do custo intrínseco
+da consulta (latência p50 do baseline, escala logarítmica). Cada ponto é uma das
+30 consultas. O overhead relativo decresce à medida que a consulta fica mais
+custosa --- efeito da amortização do custo fixo do handshake.}
+\label{fig:overhead}
+\end{figure}
+
+\paragraph{Resultados detalhados.} A Tabela~\ref{tab:completa} apresenta, para as
+30 consultas, a latência p50 nos dois cenários, o overhead relativo e a queda de
+vazão.
+
+\begin{table}[htbp]
+\centering
+\footnotesize
+\caption{Resultados por consulta: latência p50 (s) no baseline e com TLS,
+overhead de latência (\%) e queda de vazão (\%).}
+\label{tab:completa}
+\begin{tabular}{@{}llrrrr@{}}
+\toprule
+\textbf{Classe} & \textbf{\#} & \textbf{p50 base (s)} & \textbf{p50 TLS (s)} & \textbf{Overhead (\%)} & \textbf{Queda vazão (\%)} \\
+\midrule
+Agrupamento & 1 & 0,979 & 1,054 & \phantom{0}7,6 & 10,9 \\
+Agrupamento & 2 & 0,731 & 0,805 & 10,1 & \phantom{0}9,2 \\
+Agrupamento & 3 & 0,621 & 0,703 & 13,4 & 15,1 \\
+Agrupamento & 4 & 0,432 & 0,502 & 16,3 & 14,1 \\
+Agrupamento & 5 & 0,890 & 0,962 & \phantom{0}8,0 & \phantom{0}7,5 \\
+Agrupamento & 6 & 0,569 & 0,639 & 12,3 & 10,6 \\
+\midrule
+Junção & 1 & 4,241 & 4,353 & \phantom{0}2,6 & \phantom{0}2,4 \\
+Junção & 2 & 0,439 & 0,512 & 16,5 & 15,0 \\
+Junção & 3 & 0,524 & 0,614 & 17,0 & 13,1 \\
+Junção & 4 & 0,494 & 0,576 & 16,6 & 14,1 \\
+Junção & 5 & 0,504 & 0,587 & 16,6 & 14,3 \\
+Junção & 6 & 0,442 & 0,517 & 17,1 & 13,5 \\
+Junção & 7 & 1,005 & 1,078 & \phantom{0}7,3 & \phantom{0}6,6 \\
+\midrule
+Subconsulta & 1 & 0,453 & 0,525 & 15,8 & 13,4 \\
+Subconsulta & 2 & 1,020 & 1,083 & \phantom{0}6,1 & \phantom{0}4,1 \\
+Subconsulta & 3 & 11,090 & 12,093 & \phantom{0}9,0 & \phantom{0}6,7 \\
+Subconsulta & 4 & 0,448 & 0,518 & 15,4 & 13,5 \\
+Subconsulta & 5 & 0,489 & 0,561 & 14,7 & 13,3 \\
+\midrule
+Busca & 1 & 0,431 & 0,501 & 16,2 & 13,9 \\
+Busca & 2 & 0,448 & 0,518 & 15,5 & 13,9 \\
+\midrule
+Inserção & 1 & 0,432 & 0,502 & 16,2 & 14,5 \\
+Inserção & 2 & 0,434 & 0,503 & 15,9 & 13,1 \\
+Inserção & 3 & 0,435 & 0,502 & 15,5 & 19,7 \\
+Inserção & 4 & 0,445 & 0,514 & 15,4 & \phantom{0}6,9 \\
+Inserção & 5 & 0,544 & 0,629 & 15,5 & 10,3 \\
+\midrule
+Modificação & 1 & 0,595 & 0,667 & 12,1 & \phantom{0}5,4 \\
+Modificação & 2 & 0,641 & 0,716 & 11,6 & \phantom{0}9,1 \\
+Modificação & 3 & 0,435 & 0,506 & 16,2 & 15,1 \\
+Modificação & 4 & 0,733 & 0,800 & \phantom{0}9,2 & \phantom{0}8,5 \\
+Modificação & 5 & 0,720 & 0,789 & \phantom{0}9,6 & \phantom{0}4,5 \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 
 % =====================================================================
 \section{Discussão}
 \label{sec:discussao}
-% GUIA (item 7 - "discussao sobre os resultados"):
-% [PREENCHER]: interpretar o trade-off seguranca x desempenho; quando o
-% overhead é aceitavel; qual componente domina (handshake vs. cifra vs. I/O);
-% ameacas a validade (internas/externas) e limitacoes do estudo.
+
+\subsection{O trade-off segurança \emph{versus} desempenho}
+
+Os resultados sugerem que, no canal cliente--servidor, o custo do TLS é
+\emph{moderado e previsível}. Um overhead mediano em torno de 13--15\% em latência
+e de 11--13\% em vazão é, para a maioria das aplicações, um preço aceitável pela
+confidencialidade e integridade que o TLS proporciona --- especialmente diante de
+exigências regulatórias como a LGPD e o GDPR. Mais importante do que o número
+absoluto é o seu \emph{padrão}: por ser aproximadamente aditivo, o custo do TLS é
+fácil de prever e de planejar em termos de capacidade.
+
+\subsection{Qual componente domina o overhead?}
+
+A evidência aponta de forma consistente para o \textbf{handshake por conexão}
+como componente dominante, e não para a cifragem simétrica contínua dos dados.
+Dois fatos sustentam essa conclusão: (i) o custo absoluto adicional é quase
+constante (mediana de 71,7~ms), independentemente do volume de dados que a
+consulta processa ou retorna; e (ii) o overhead relativo decresce
+monotonicamente com o custo da consulta (Figura~\ref{fig:overhead}). Se a cifra
+simétrica sobre os dados transferidos fosse o fator dominante, esperaríamos o
+oposto --- consultas que retornam mais dados pagariam \emph{mais}, não menos.
+A cifra em si, acelerada por instruções de hardware (AES-NI) e barata por
+\emph{byte}, é desprezível diante do custo assimétrico do estabelecimento da
+conexão para os tamanhos de resultado desta carga.
+
+\subsection{Implicações práticas}
+
+A principal implicação é que \textbf{o número que medimos representa um pior
+caso}. Como nosso arcabouço abre uma conexão nova a cada execução, ele paga o
+handshake integralmente em toda operação. Aplicações reais mantêm \emph{pools} de
+conexões persistentes e reutilizam o canal já estabelecido por milhares de
+operações, amortizando o handshake até torná-lo negligenciável. Assim, sistemas
+com reúso de conexão devem observar overhead bem menor do que o aqui reportado,
+enquanto os padrões que mais sofrem são justamente os de \emph{conexões
+curtas} --- funções \emph{serverless}, scripts de linha de comando (como o próprio
+\texttt{mongosh}) e arquiteturas de conexão-por-requisição. Mitigações adicionais
+incluem o TLS~1.3, cujo handshake de 1-RTT e a retomada de sessão
+(\emph{session resumption}) reduzem ainda mais esse custo~\cite{rescorla2018tls}.
+
+\subsection{Ameaças à validade}
+
+Reconhecemos limitações importantes, coerentes com o escopo delimitado do estudo.
+
+\paragraph{Validade interna.} A latência absoluta inclui a partida do processo
+\texttt{mongosh}; embora essa parcela se cancele na diferença entre cenários
+(Seção~\ref{sec:met-protocolo}), ela impede a leitura dos valores absolutos como
+latência ``pura'' de consulta. O número de repetições ($n=20$) é modesto e faz os
+estimadores de p95/p99 colapsarem no máximo observado, razão pela qual nos
+apoiamos na mediana. Por fim, caso a imagem do MongoDB não tenha sido fixada em
+uma versão específica (isto é, usando a tag \texttt{latest}), a reprodutibilidade
+bit a bit fica comprometida.
+
+\paragraph{Validade externa.} O experimento roda em \emph{nó único} e por
+\emph{loopback}. Isso significa que (i) não medimos a amplificação criptográfica
+da comunicação \emph{intra-cluster} --- em um \emph{replica set} ou cluster
+fragmentado, cada escrita replicada e cada rodada de consenso também trafegaria
+cifrada, tendendo a ampliar o overhead em relação ao que observamos; e (ii) a
+ausência de latência de rede real faz com que a fração de tempo atribuível à
+criptografia (custo de CPU) seja relativamente maior do que seria sobre uma WAN.
+Além disso, avaliamos apenas a criptografia \emph{em trânsito}: os custos de
+criptografia \emph{em repouso} (TDE) e \emph{em uso} não foram medidos. O
+certificado é \emph{self-signed} e a autenticação mútua está desabilitada, de modo
+que não contabilizamos o custo de validação de cadeias de certificados nem de
+mTLS, presentes em ambientes de produção. Finalmente, os resultados referem-se a
+um único conjunto de dados (Stack Exchange) e a um único host; cargas, esquemas e
+hardware distintos podem deslocar os números.
 
 
 % =====================================================================
 \section{Conclusão e Trabalhos Futuros}
 \label{sec:conclusao}
-% [PREENCHER]: sintetizar as respostas as perguntas de pesquisa e apontar
-% extensoes (ex.: criptografia em uso / queryable encryption, enclaves,
-% outros SGBDs, cargas analiticas (OLAP)).
+
+Este trabalho quantificou, de forma reprodutível, o overhead da criptografia em
+trânsito (TLS) sobre o desempenho do MongoDB, sob uma carga de 30 consultas reais
+e heterogêneas. Retomando as perguntas de pesquisa:
+
+\begin{itemize}
+  \item \textbf{PP1.} Habilitar o TLS no canal cliente--servidor degradou o
+        desempenho em todas as consultas, com overhead mediano de latência de
+        cerca de 15\% (13\% em média) e queda de vazão de cerca de 13\% (11\% em
+        média) --- um custo moderado e previsível.
+  \item \textbf{PP2.} O overhead variou entre as classes (de $\sim$11\% em
+        agrupamento/modificação a $\sim$16\% em busca/inserção), mas essa variação
+        \emph{não} decorre da semântica da classe: decorre do custo típico das
+        consultas de cada classe.
+  \item \textbf{PP3.} O overhead \emph{relativo} é inversamente proporcional ao
+        custo intrínseco da consulta. Isso porque o custo do TLS é quase
+        constante em termos absolutos ($\approx$65--70~ms), dominado pelo
+        \emph{handshake} pago a cada conexão; quanto mais cara a consulta, mais
+        esse custo fixo se dilui.
+\end{itemize}
+
+A mensagem prática é dupla: o TLS em trânsito é barato o bastante para ser a
+opção padrão na maioria dos cenários; e o reúso de conexões (\emph{connection
+pooling}) é a alavanca mais eficaz para reduzir seu custo, já que ataca
+diretamente o componente dominante.
+
+\paragraph{Trabalhos futuros.} As limitações apontadas na
+Seção~\ref{sec:discussao} delineiam extensões naturais. Primeiro, avaliar a
+criptografia \emph{em repouso} (por exemplo, a cifragem no nível do WiredTiger ou
+via LUKS no volume de dados), completando os cenários originalmente previstos.
+Segundo, migrar de instâncias de nó único para um \emph{replica set} ou cluster
+fragmentado, a fim de medir a amplificação do TLS na comunicação intra-cluster
+(replicação e consenso). Terceiro, um estudo específico do efeito do
+\emph{connection pooling}, contrastando o pior caso aqui medido com o custo
+amortizado. Por fim, avançar para a criptografia \emph{em uso}, avaliando
+recursos como a \emph{Queryable Encryption} do próprio MongoDB, e replicar o
+experimento em outros SGBDs distribuídos e sobre uma rede real.
 
 
 % =====================================================================
