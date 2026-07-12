@@ -7,17 +7,11 @@ import os
 
 # Configurações do Experimento
 MAPA_QUERIES = {
-    "AGRUPAMENTO": 6, 
-    "JUNCAO": 7, 
-    "SUBCONSULTA": 5, 
-    "BUSCA": 2, 
-    "INSERCAO": 5, 
-    "MODIFICACAO": 5
+    "AGRUPAMENTO": 6,
 }
 REPETICOES = 20
-LOG_FILE = "resultados.csv"
+LOG_FILE = "resultados_mestrado.csv"
 ARQUIVO_QUERIES = "./consultas/queries.js"
-TEMP_FILE = "temp_query.js"
 
 def carregar_queries(filepath):
     queries = {k: {} for k in MAPA_QUERIES.keys()}
@@ -38,19 +32,16 @@ def carregar_queries(filepath):
                     queries[current_type][current_idx] = query_str
                 
                 if "TIPO 1" in stripped: current_type = "AGRUPAMENTO"; current_idx = None; buffer = []; continue
-                if "TIPO 2" in stripped: current_type = "JUNCAO"; current_idx = None; buffer = []; continue
-                if "TIPO 3" in stripped: current_type = "SUBCONSULTA"; current_idx = None; buffer = []; continue
-                if "TIPO 4" in stripped: current_type = "BUSCA"; current_idx = None; buffer = []; continue
-                if "TIPO 5" in stripped: current_type = "INSERCAO"; current_idx = None; buffer = []; continue
-                if "TIPO 6" in stripped: current_type = "MODIFICACAO"; current_idx = None; buffer = []; continue
-
-            # Detecta o início de uma nova query (ex: "// 1.", "// 2.")
+                #if "TIPO 2" in stripped: current_type = "JUNCAO"; current_idx = None; buffer = []; continue
+                #if "TIPO 3" in stripped: current_type = "SUBCONSULTA"; current_idx = None; buffer = []; continue
+                #if "TIPO 4" in stripped: current_type = "BUSCA"; current_idx = None; buffer = []; continue
+                #if "TIPO 5" in stripped: current_type = "INSERCAO"; current_idx = None; buffer = []; continue
+                #if "TIPO 6" in stripped: current_type = "MODIFICACAO"; current_idx = None; buffer = []; continue
+                
             match = re.match(r"^//\s*(\d+)\.", stripped)
             if match and current_type:
                 if current_idx is not None and buffer:
-                    # Salva a query anterior acumulada no buffer
                     query_str = " ".join(buffer).strip()
-                    # Remove vírgulas residuais no final da string se houver
                     if query_str.endswith(','): query_str = query_str[:-1]
                     queries[current_type][current_idx] = query_str
                 
@@ -58,11 +49,9 @@ def carregar_queries(filepath):
                 buffer = []
                 continue
 
-            # Acumula as linhas da query ativa
             if current_type and current_idx and not stripped.startswith("//"):
                 buffer.append(stripped)
 
-        # Salva a última query pendente após o fim do arquivo
         if current_type and current_idx and buffer:
             query_str = " ".join(buffer).strip()
             if query_str.endswith(','): query_str = query_str[:-1]
@@ -70,30 +59,34 @@ def carregar_queries(filepath):
 
     return queries
 
-# Carrega as queries uma única vez na inicialização
 QUERIES_CARREGADAS = carregar_queries(ARQUIVO_QUERIES)
 
-def rodar_query_mongo(tipo, index, conn_string):
-    """Salva a query num arquivo temporário e executa via mongosh."""
+def rodar_query_distribuida(tipo, index, container, uri, flags_extras=""):
+    """
+    Injeta a query diretamente no mongosh dentro do container via Docker Exec (STDIN).
+    Isso garante que o script python rode de fora, mas a consulta execute nativamente na rede do cluster.
+    """
     query_text = QUERIES_CARREGADAS[tipo].get(index)
     if not query_text:
         print(f"  [ERRO] Query {index} do tipo {tipo} não encontrada no parser!")
         return 0
     
-    # Grava a query em um .js temporário (Evita quebra de aspas no terminal)
-    with open(TEMP_FILE, "w", encoding='utf-8') as f:
-        f.write(query_text)
-
-    # Executa o arquivo temporário diretamente pelo mongosh
-    cmd = f'mongosh "{conn_string}" --quiet {TEMP_FILE}'
+    # Monta o comando de execução interativa (-i) do Docker
+    cmd = f'docker exec -i {container} mongosh "{uri}" {flags_extras} --quiet'
     
     start = time.perf_counter()
-    subprocess.run(cmd, shell=True, capture_output=True)
+    # Passa o texto da query via input (simulando digitação no terminal interno)
+    subprocess.run(cmd, shell=True, input=query_text, text=True, capture_output=True)
     end = time.perf_counter()
     
     return end - start
 
 def executar_benchmark():
+    # URIs formatadas para a arquitetura de Replica Set no Docker
+    URI_BASELINE = "mongodb://mongo_base_1:27017,mongo_base_2:27017,mongo_base_3:27017/StackOverflow?replicaSet=rs_baseline"
+    URI_TLS = "mongodb://mongo_tls_1:27017,mongo_tls_2:27017,mongo_tls_3:27017/StackOverflow?replicaSet=rs_tls"
+    FLAGS_TLS = "--tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames"
+
     with open(LOG_FILE, 'w', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow(['Tipo', 'Query_Index', 'Cenario', 'P50', 'P95', 'P99', 'Vazao_ops_sec'])
@@ -105,41 +98,39 @@ def executar_benchmark():
             
             for i in range(1, qtd + 1):
                 tempos_b, tempos_t = [], []
-                print(f"  -> Rodando Query {i}/{qtd}...")
+                print(f"  -> Rodando Query {i}/{qtd} (20 repetições)...")
                 
-                # URIs com o banco especificado para evitar que execute no banco 'test'
-                conn_baseline = "mongodb://localhost:27017/StackOverflow"
-                conn_tls = "mongodb://localhost:27018/StackOverflow?tls=true&tlsAllowInvalidCertificates=true"
-
-                # 1. Warm-up (Garante que os dados vão para o cache do SO e motor WiredTiger)
-                rodar_query_mongo(tipo, i, conn_baseline)
-                rodar_query_mongo(tipo, i, conn_tls)
+                # 1. Warm-up (Garante cache do SO, cache do WiredTiger e estabelecimento da rota Docker)
+                rodar_query_distribuida(tipo, i, "mongo_base_1", URI_BASELINE)
+                rodar_query_distribuida(tipo, i, "mongo_tls_1", URI_TLS, FLAGS_TLS)
 
                 # 2. Medições Oficiais
                 for _ in range(REPETICOES):
-                    tempos_b.append(rodar_query_mongo(tipo, i, conn_baseline))
-                    tempos_t.append(rodar_query_mongo(tipo, i, conn_tls))
+                    # Executa no cluster Baseline
+                    tempos_b.append(rodar_query_distribuida(tipo, i, "mongo_base_1", URI_BASELINE))
+                    
+                    # Executa no cluster TLS
+                    tempos_t.append(rodar_query_distribuida(tipo, i, "mongo_tls_1", URI_TLS, FLAGS_TLS))
                 
-                # 3. Cálculo e Log
+                # 3. Cálculo e Gravação no CSV
                 if sum(tempos_b) > 0 and sum(tempos_t) > 0:
                     met_b = calcular_metricas(tempos_b)
                     met_t = calcular_metricas(tempos_t)
                     
                     writer.writerow([tipo, i, 'Baseline', met_b['p50'], met_b['p95'], met_b['p99'], met_b['vazao']])
                     writer.writerow([tipo, i, 'TLS', met_t['p50'], met_t['p95'], met_t['p99'], met_t['vazao']])
+                    
+                    print(f"     [OK] Baseline p50: {met_b['p50']:.4f}s | TLS p50: {met_t['p50']:.4f}s")
     
-    # Cleanup do arquivo temporário
-    if os.path.exists(TEMP_FILE):
-        os.remove(TEMP_FILE)
-    print("\nBENCHMARK CONCLUÍDO! Resultados salvos em:", LOG_FILE)
+    print(f"\nBENCHMARK CONCLUÍDO COM RIGOR! Resultados salvos e prontos para tabulação em: {LOG_FILE}")
 
 def calcular_metricas(tempos):
     tempos.sort()
     vazao = len(tempos) / sum(tempos) if sum(tempos) > 0 else 0
     return {
-        "p50": statistics.median(tempos),
-        "p95": tempos[int(len(tempos) * 0.95)],
-        "p99": tempos[int(len(tempos) * 0.99)],
+        "p50": round(statistics.median(tempos), 6),
+        "p95": round(tempos[int(len(tempos) * 0.95)], 6),
+        "p99": round(tempos[int(len(tempos) * 0.99)], 6),
         "vazao": round(vazao, 4)
     }
 

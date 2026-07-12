@@ -1,0 +1,125 @@
+==================================================
+ AUDITANDO CLUSTER 1: BASELINE (Sem Criptografia)
+==================================================
+--------------------------------------------------
+RESUMO DE ÍNDICES E INTEGRIDADE:
+--------------------------------------------------
+=> Coleção: Users
+   Total de índices: 4
+   Chaves criadas:
+     - Nome: _id_ | Definição: {"_id":1}
+     - Nome: Id_1 | Definição: {"Id":1}
+     - Nome: Location_1 | Definição: {"Location":1}
+     - Nome: Reputation_1 | Definição: {"Reputation":1}
+   Status de Integridade:  [OK] ÍNTEGRO
+--------------------------------------------------
+=> Coleção: Posts
+   Total de índices: 8
+   Chaves criadas:
+     - Nome: _id_ | Definição: {"_id":1}
+     - Nome: Id_1 | Definição: {"Id":1}
+     - Nome: OwnerUserId_1 | Definição: {"OwnerUserId":1}
+     - Nome: ViewCount_-1 | Definição: {"ViewCount":-1}
+     - Nome: Score_-1 | Definição: {"Score":-1}
+     - Nome: AcceptedAnswerId_1 | Definição: {"AcceptedAnswerId":1}
+     - Nome: PostTypeId_1_Score_-1 | Definição: {"PostTypeId":1,"Score":-1}
+     - Nome: PostTypeId_1_ViewCount_-1 | Definição: {"PostTypeId":1,"ViewCount":-1}
+   Status de Integridade:  [OK] ÍNTEGRO
+--------------------------------------------------
+=> Coleção: Comments
+   Total de índices: 5
+   Chaves criadas:
+     - Nome: _id_ | Definição: {"_id":1}
+     - Nome: PostId_1 | Definição: {"PostId":1}
+     - Nome: UserId_1 | Definição: {"UserId":1}
+     - Nome: CreationDate_1 | Definição: {"CreationDate":1}
+     - Nome: Score_1 | Definição: {"Score":1}
+   Status de Integridade:  [OK] ÍNTEGRO
+--------------------------------------------------
+=> Coleção: Votes
+   Total de índices: 2
+   Chaves criadas:
+     - Nome: _id_ | Definição: {"_id":1}
+     - Nome: PostId_1 | Definição: {"PostId":1}
+   Status de Integridade:  [OK] ÍNTEGRO
+--------------------------------------------------
+=> Coleção: PostLinks
+   Total de índices: 3
+   Chaves criadas:
+     - Nome: _id_ | Definição: {"_id":1}
+     - Nome: PostId_1 | Definição: {"PostId":1}
+     - Nome: RelatedPostId_1 | Definição: {"RelatedPostId":1}
+   Status de Integridade:  [OK] ÍNTEGRO
+--------------------------------------------------
+=> Coleção: Badges
+   Total de índices: 4
+   Chaves criadas:
+     - Nome: _id_ | Definição: {"_id":1}
+     - Nome: UserId_1 | Definição: {"UserId":1}
+     - Nome: Name_1 | Definição: {"Name":1}
+     - Nome: Date_1 | Definição: {"Date":1}
+   Status de Integridade:  [OK] ÍNTEGRO
+--------------------------------------------------
+
+==================================================
+ AUDITANDO CLUSTER 2: TLS (Criptografado)
+==================================================
+--------------------------------------------------
+RESUMO DE ÍNDICES E INTEGRIDADE:
+--------------------------------------------------
+=> Coleção: Users
+   Total de índices: 4
+   Chaves criadas:
+     - Nome: _id_ | Definição: {"_id":1}
+     - Nome: Id_1 | Definição: {"Id":1}
+     - Nome: Location_1 | Definição: {"Location":1}
+     - Nome: Reputation_1 | Definição: {"Reputation":1}
+   Status de Integridade:  [OK] ÍNTEGRO
+--------------------------------------------------
+=> Coleção: Posts
+   Total de índices: 8
+   Chaves criadas:
+     - Nome: _id_ | Definição: {"_id":1}
+     - Nome: Id_1 | Definição: {"Id":1}
+     - Nome: PostTypeId_1_ViewCount_-1 | Definição: {"PostTypeId":1,"ViewCount":-1}
+     - Nome: PostTypeId_1_Score_-1 | Definição: {"PostTypeId":1,"Score":-1}
+     - Nome: AcceptedAnswerId_1 | Definição: {"AcceptedAnswerId":1}
+     - Nome: Score_-1 | Definição: {"Score":-1}
+     - Nome: ViewCount_-1 | Definição: {"ViewCount":-1}
+     - Nome: OwnerUserId_1 | Definição: {"OwnerUserId":1}
+   Status de Integridade:  [OK] ÍNTEGRO
+--------------------------------------------------
+=> Coleção: Comments
+   Total de índices: 5
+   Chaves criadas:
+     - Nome: _id_ | Definição: {"_id":1}
+     - Nome: Score_1 | Definição: {"Score":1}
+     - Nome: CreationDate_1 | Definição: {"CreationDate":1}
+     - Nome: UserId_1 | Definição: {"UserId":1}
+     - Nome: PostId_1 | Definição: {"PostId":1}
+   Status de Integridade:  [OK] ÍNTEGRO
+--------------------------------------------------
+=> Coleção: Votes
+   Total de índices: 2
+   Chaves criadas:
+     - Nome: _id_ | Definição: {"_id":1}
+     - Nome: PostId_1 | Definição: {"PostId":1}
+   Status de Integridade:  [OK] ÍNTEGRO
+--------------------------------------------------
+=> Coleção: PostLinks
+   Total de índices: 3
+   Chaves criadas:
+     - Nome: _id_ | Definição: {"_id":1}
+     - Nome: RelatedPostId_1 | Definição: {"RelatedPostId":1}
+     - Nome: PostId_1 | Definição: {"PostId":1}
+   Status de Integridade:  [OK] ÍNTEGRO
+--------------------------------------------------
+=> Coleção: Badges
+   Total de índices: 4
+   Chaves criadas:
+     - Nome: _id_ | Definição: {"_id":1}
+     - Nome: Date_1 | Definição: {"Date":1}
+     - Nome: Name_1 | Definição: {"Name":1}
+     - Nome: UserId_1 | Definição: {"UserId":1}
+   Status de Integridade:  [OK] ÍNTEGRO
+--------------------------------------------------

@@ -1,41 +1,37 @@
-No Baseline (27017):
+// ==========================================
+// 1. ÍNDICES DE CHAVES PRIMÁRIAS (PKs)
+// Garante a unicidade e busca rápida por ID da origem do Stack Overflow
+// Obs: O MongoDB já indexa o '_id' nativamente, mas indexamos o 'Id' original
+// ==========================================
+db.Posts.createIndex({ Id: 1 }, { unique: true });
+db.Comments.createIndex({ Id: 1 }, { unique: true });
+db.Users.createIndex({ Id: 1 }, { unique: true });
+db.Badges.createIndex({ Id: 1 }, { unique: true });
+db.Votes.createIndex({ Id: 1 }, { unique: true });
 
-Bash
-docker exec -it mongo_baseline mongosh "StackOverflow" --eval "
-  db.Users.createIndex({ Id: 1 });
-  db.Posts.createIndex({ Id: 1 });
-  db.Posts.createIndex({ OwnerUserId: 1 });
-  db.Comments.createIndex({ PostId: 1 });
-  db.Comments.createIndex({ UserId: 1 });
-  db.Votes.createIndex({ PostId: 1 });
-  db.Badges.createIndex({ UserId: 1 });
-"
-No TLS (27018):
+// ==========================================
+// 2. ÍNDICES DE CHAVES ESTRANGEIRAS (FKs)
+// Fundamentais para erradicar o "Collection Scan" durante os $lookups (Junções)
+// ==========================================
+db.Posts.createIndex({ OwnerUserId: 1 });
+db.Posts.createIndex({ ParentId: 1 });
+db.Comments.createIndex({ PostId: 1 });
+db.Comments.createIndex({ UserId: 1 });
+db.Badges.createIndex({ UserId: 1 });
+db.Votes.createIndex({ PostId: 1 });
 
-Bash
-docker exec -it mongo_tls mongosh --tls --tlsAllowInvalidCertificates "StackOverflow" --eval "
-  db.Users.createIndex({ Id: 1 });
-  db.Posts.createIndex({ Id: 1 });
-  db.Posts.createIndex({ OwnerUserId: 1 });
-  db.Comments.createIndex({ PostId: 1 });
-  db.Comments.createIndex({ UserId: 1 });
-  db.Votes.createIndex({ PostId: 1 });
-  db.Badges.createIndex({ UserId: 1 });
-"
+// ==========================================
+// 3. ÍNDICES COMPOSTOS E DE FILTRAGEM
+// Otimizam diretamente as etapas de $match, $group e $sort
+// ==========================================
+// Acelera a agregação que agrupa Score por tipo de Post (Agrupamento 1)
+db.Posts.createIndex({ PostTypeId: 1, Score: -1 });
 
-Para o Baseline:
+// Acelera buscas de Posts específicos ordenados por visualizações
+db.Posts.createIndex({ PostTypeId: 1, ViewCount: -1 });
 
-Bash
-docker exec -it mongo_baseline mongosh "StackOverflow" --eval "
-  db.Posts.createIndex({ ViewCount: -1 });
-  db.Posts.createIndex({ Score: -1 });
-  db.Badges.createIndex({ Name: 1 });
-"
-Para o TLS:
+// Acelera as agregações e atualizações baseadas na localidade (Ex: "Brazil") e Reputação
+db.Users.createIndex({ Location: 1, Reputation: -1 });
 
-Bash
-docker exec -it mongo_tls mongosh --tls --tlsAllowInvalidCertificates "StackOverflow" --eval "
-  db.Posts.createIndex({ ViewCount: -1 });
-  db.Posts.createIndex({ Score: -1 });
-  db.Badges.createIndex({ Name: 1 });
-"
+// Acelera agrupamentos temporais, como o volume de comentários por mês
+db.Comments.createIndex({ CreationDate: 1 });

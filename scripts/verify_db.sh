@@ -1,11 +1,10 @@
 #!/bin/bash
-# Script: verificar_banco.sh
-# Verifica o estado dos bancos de dados Baseline e TLS
+# Verifica o estado dos bancos de dados nos clusters Baseline e TLS
 
 echo "=========================================="
-echo "DIAGNÓSTICO: BASELINE (27017)"
+echo "DIAGNÓSTICO: BASELINE (Nó: mongo_base_1)"
 echo "=========================================="
-docker exec -it mongo_baseline mongosh --eval "
+docker exec -it mongo_base_1 mongosh --eval "
   print('Bancos existentes: ' + db.getMongo().getDBNames());
   print('--- Conteúdo do StackOverflow ---');
   db.getSiblingDB('StackOverflow').getCollectionNames().forEach(function(col) {
@@ -14,9 +13,9 @@ docker exec -it mongo_baseline mongosh --eval "
 "
 
 echo -e "\n=========================================="
-echo "DIAGNÓSTICO: TLS (27018)"
+echo "DIAGNÓSTICO: TLS (Nó: mongo_tls_1)"
 echo "=========================================="
-docker exec -it mongo_tls mongosh --tls --tlsAllowInvalidCertificates --eval "
+docker exec -it mongo_tls_1 mongosh --tls --tlsAllowInvalidCertificates --tlsAllowInvalidHostnames --eval "
   print('Bancos existentes: ' + db.getMongo().getDBNames());
   print('--- Conteúdo do StackOverflow ---');
   db.getSiblingDB('StackOverflow').getCollectionNames().forEach(function(col) {

@@ -1,32 +1,32 @@
 #!/bin/bash
-# Script: importar_ambos.sh
-# Importa os dados da pasta 'db_data' para os dois nós do MongoDB (Baseline e TLS)
+# Importa dados de dentro da rede virtual (mongo_net) direto para os Replica Sets
 
-echo "Iniciando importação de dados..."
+echo "Iniciando importação de dados no Cluster..."
 
-# O diretório que contém os arquivos é o db_data
 DIR="db_data"
 
 for f in "$DIR"/*.csv; do
     colecao=$(basename "$f" .csv)
     echo "--- Processando: $colecao ---"
     
-    # 1. Importar no Baseline (porta 27017, sem TLS)
-    echo "Enviando para Baseline (27017)..."
-    docker run --rm -v "$(pwd)/$DIR:/data" mongo:latest mongoimport \
-        --host host.docker.internal --port 27017 \
-        --db StackOverflow --collection "$colecao" --type csv --headerline --file "/data/$(basename "$f")"
+    # 1. Importar no Baseline (Comunicação Intra-Rede)
+    #echo "Enviando para o Cluster Baseline..."
+    #docker run --rm --network projeto_seguranca_mongo_net -v "$(pwd)/$DIR:/data" mongo:latest mongoimport \
+    #    --uri "mongodb://mongo_base_1:27017,mongo_base_2:27017,mongo_base_3:27017/StackOverflow?replicaSet=rs_baseline" \
+    #    --collection "$colecao" --type csv --headerline --file "/data/$(basename "$f")"
 
-    # 2. Importar no TLS (porta 27018, com TLS)
-    echo "Enviando para TLS (27018)..."
-    docker run --rm -v "$(pwd)/$DIR:/data" mongo:latest mongoimport \
+    # 2. Importar no TLS (Forçando o bypass de certificado via flags SSL externas)
+    echo "Enviando para o Cluster TLS..."
+    docker run --rm --network projeto_seguranca_mongo_net -v "$(pwd)/$DIR:/data" mongo:latest mongoimport \
+        --host "rs_tls/mongo_tls_1:27017,mongo_tls_2:27017,mongo_tls_3:27017" \
         --ssl \
         --sslAllowInvalidCertificates \
-        --host host.docker.internal --port 27018 \
-        --db StackOverflow --collection "$colecao" --type csv --headerline --file "/data/$(basename "$f")"
+        --sslAllowInvalidHostnames \
+        --db StackOverflow \
+        --collection "$colecao" --type csv --headerline --file "/data/$(basename "$f")"
 
     if [ $? -eq 0 ]; then
-        echo "Sucesso: $colecao importado nos dois nós."
+        echo "Sucesso: $colecao importado nos clusters."
     else
         echo "Atenção: Houve um erro na importação de $colecao."
     fi

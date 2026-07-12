@@ -1,0 +1,25 @@
+==========================================
+DIAGNÓSTICO: BASELINE (Nó: mongo_base_1)
+==========================================
+Bancos existentes: StackOverflow,admin,config,local
+--- Conteúdo do StackOverflow ---
+Coleção: Posts | Docs: 100000
+Coleção: Badges | Docs: 224671
+Coleção: Comments | Docs: 33126
+Coleção: PostLinks | Docs: 435
+Coleção: Users | Docs: 15017
+Coleção: PostTypes | Docs: 8
+Coleção: Votes | Docs: 89353
+
+==========================================
+DIAGNÓSTICO: TLS (Nó: mongo_tls_1)
+==========================================
+Bancos existentes: StackOverflow,admin,config,local
+--- Conteúdo do StackOverflow ---
+Coleção: Votes | Docs: 89353
+Coleção: Comments | Docs: 33126
+Coleção: Badges | Docs: 224671
+Coleção: Posts | Docs: 100000
+Coleção: PostTypes | Docs: 8
+Coleção: PostLinks | Docs: 435
+Coleção: Users | Docs: 15017
